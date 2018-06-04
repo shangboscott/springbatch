@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:batch="http://www.springframework.org/schema/batch"
+	xsi:schemaLocation="http://www.springframework.org/schema/batch 
+		http://www.springframework.org/schema/batch/spring-batch.xsd
+		http://www.springframework.org/schema/beans 
+		http://www.springframework.org/schema/beans/spring-beans.xsd">
+	
+	<!-- 定义  dataSource -->
+	<bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close">
+	    <property name="driverClassName" value="oracle.jdbc.driver.OracleDriver" />
+	    <property name="url" value="jdbc:oracle:thin:@localhost:1521:xe" />
+	    <property name="username" value="hr" />
+	    <property name="password" value="123456" />
+	</bean>
+	
+	<!-- 定义 jdbc 事务管理器 -->
+	<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+	    <property name="dataSource" ref="dataSource"/>
+	</bean>
+	
+	<!-- 定义 jobRepository, 用来持久化 job -->
+	<batch:job-repository id="jobRepository" data-source="dataSource" transaction-manager="transactionManager"/>
+
+	<!-- 定义 jobLauncher, 来用运行 job -->
+	<bean id="jobLauncher" class="org.springframework.batch.core.launch.support.SimpleJobLauncher">
+	    <property name="jobRepository" ref="jobRepository" />
+	</bean>
+
+	<!-- 定义 job -->
+	<batch:job id="EndOfJob" job-repository="jobRepository">
+		<batch:step id="EndOfStep">
+			<batch:tasklet ref="endOfTasklet"/>
+		</batch:step>
+	</batch:job>
+
+	<!-- 定义 tasklet -->
+	<bean id="endOfTasklet" class="org.springframework.batch.core.step.tasklet.SystemCommandTasklet" scope="step">
+	    <property name="command" value="java -version" />
+	    <property name="timeout" value="50000" />
+	</bean>
+
+</beans>

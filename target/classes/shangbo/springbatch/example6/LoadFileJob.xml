@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:batch="http://www.springframework.org/schema/batch"
+	xsi:schemaLocation="http://www.springframework.org/schema/batch 
+		http://www.springframework.org/schema/batch/spring-batch.xsd
+		http://www.springframework.org/schema/beans 
+		http://www.springframework.org/schema/beans/spring-beans.xsd">
+	
+	<!-- 定义  dataSource -->
+	<bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close">
+	    <property name="driverClassName" value="oracle.jdbc.driver.OracleDriver" />
+	    <property name="url" value="jdbc:oracle:thin:@localhost:1521:xe" />
+	    <property name="username" value="hr" />
+	    <property name="password" value="123456" />
+	</bean>
+	
+	<!-- 定义 jdbc 事务管理器 -->
+	<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+	    <property name="dataSource" ref="dataSource"/>
+	</bean>
+	
+	<!-- 定义 jobRepository, 用来持久化 job -->
+	<batch:job-repository id="jobRepository" data-source="dataSource" transaction-manager="transactionManager"/>
+
+	<!-- 定义 jobLauncher, 来用运行 job -->
+	<bean id="jobLauncher" class="org.springframework.batch.core.launch.support.SimpleJobLauncher">
+	    <property name="jobRepository" ref="jobRepository" />
+	</bean>
+
+	<!-- 定义 job -->
+	<batch:job id="loadFileJob" job-repository="jobRepository">
+		<batch:step id="loadFileStep">
+			<batch:tasklet>
+				<batch:chunk reader="loadFileReader" processor="loadFileProcessor" writer="loadFileWriter" commit-interval="10">
+					<batch:listeners>
+						<batch:listener ref="simpleChunkListener"/>
+						<batch:listener ref="simpleItemReadListener"/>
+						<batch:listener ref="simpleItemProcessListener"/>
+						<batch:listener ref="simpleItemWriteListener"/>
+						<batch:listener ref="simpleSkipListener"/>
+					</batch:listeners>
+				</batch:chunk>
+			</batch:tasklet>
+			<batch:listeners>
+				<batch:listener ref="simpleStepExecutionListener"/>
+			</batch:listeners>
+		</batch:step>
+		<batch:listeners>
+			<batch:listener ref="simpleJobExecutionListener"/>
+		</batch:listeners>
+	</batch:job>
+	
+	<bean id="simpleJobExecutionListener" class="shangbo.springbatch.example6.SimpleJobExecutionListener"/>
+	<bean id="simpleStepExecutionListener" class="shangbo.springbatch.example6.SimpleStepExecutionListener"/>
+	<bean id="simpleChunkListener" class="shangbo.springbatch.example6.SimpleChunkListener"/>
+	<bean id="simpleItemReadListener" class="shangbo.springbatch.example6.SimpleItemReadListener"/>
+	<bean id="simpleItemProcessListener" class="shangbo.springbatch.example6.SimpleItemProcessListener"/>
+	<bean id="simpleItemWriteListener" class="shangbo.springbatch.example6.SimpleItemWriteListener"/>
+	<bean id="simpleSkipListener" class="shangbo.springbatch.example6.SimpleSkipListener"/>
+
+	<!-- 定义 reader -->
+	<bean id="loadFileReader" class="org.springframework.batch.item.file.FlatFileItemReader" scope="step">
+		<!-- 指定要读取的文件 -->
+	    <property name="resource" value="file:///D:/0_Shangbo/Dev/Workspace/people_#{jobParameters['business_date']}.txt" />
+		<!-- 忽略以 header 和 footer 开头的行-->
+		<property name="comments">
+			<list>
+				<value>header</value>
+				<value>footer</value>
+			</list>
+		</property>
+		<!-- 文件编码方式 -->
+		<property name="encoding" value="UTF-8" />
+	    <!-- 文件不存在则报错 -->
+		<property name="strict" value="true" />
+		<!-- 指定如何将行转成对象 -->
+	    <property name="lineMapper" ref="lineMapper" />
+	</bean>
+	
+	<bean id="lineMapper" class="org.springframework.batch.item.file.mapping.DefaultLineMapper" scope="step">
+		<property name="fieldSetMapper" ref="fieldSetMapper" />
+		<property name="lineTokenizer" ref="lineTokenizer" />
+	</bean>
+	
+	<bean id="fieldSetMapper" class="org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper" scope="step">
+		<property name="targetType" value="shangbo.springbatch.example6.People" />
+	</bean>
+	
+	<bean id="lineTokenizer" class="org.springframework.batch.item.file.transform.DelimitedLineTokenizer" scope="step">
+		<property name="delimiter" value="|" />
+		<property name="includedFields" value="0,1" />
+		<property name="names" value="id,name" />
+	</bean>
+
+	<!-- 定义 processor -->
+	<bean id="loadFileProcessor" class="org.springframework.batch.item.support.PassThroughItemProcessor" scope="step"/>
+
+	<!-- 定义 writer -->
+	<bean id="loadFileWriter" class="org.springframework.batch.item.database.JdbcBatchItemWriter" scope="step">
+		<property name="sql" value="insert into people values (:id,:name)"/>
+		<property name="jdbcTemplate" ref="jdbcTemplate"/>
+		<property name="itemSqlParameterSourceProvider" ref="itemSqlParameterSourceProvider"/>
+	</bean>
+	
+	<bean id="jdbcTemplate" class="org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate" scope="step">
+		<constructor-arg ref="dataSource"></constructor-arg>
+	</bean>
+	
+	<bean id="itemSqlParameterSourceProvider" class="org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider" scope="step"/>
+
+</beans>

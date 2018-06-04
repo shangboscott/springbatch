@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:batch="http://www.springframework.org/schema/batch"
+	xsi:schemaLocation="http://www.springframework.org/schema/batch 
+		http://www.springframework.org/schema/batch/spring-batch.xsd
+		http://www.springframework.org/schema/beans 
+		http://www.springframework.org/schema/beans/spring-beans.xsd">
+	
+	<!-- 定义  dataSource -->
+	<bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close">
+	    <property name="driverClassName" value="oracle.jdbc.driver.OracleDriver" />
+	    <property name="url" value="jdbc:oracle:thin:@localhost:1521:xe" />
+	    <property name="username" value="hr" />
+	    <property name="password" value="123456" />
+	</bean>
+	
+	<!-- 定义 jdbc 事务管理器 -->
+	<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+	    <property name="dataSource" ref="dataSource"/>
+	</bean>
+	
+	<!-- 定义 jobRepository, 用来持久化 job -->
+	<batch:job-repository id="jobRepository" data-source="dataSource" transaction-manager="transactionManager"/>
+
+	<!-- 定义 jobLauncher, 来用运行 job -->
+	<bean id="jobLauncher" class="org.springframework.batch.core.launch.support.SimpleJobLauncher">
+	    <property name="jobRepository" ref="jobRepository" />
+	</bean>
+
+	<!-- 定义 job -->
+	<batch:job id="extractFileJob" job-repository="jobRepository">
+		<batch:step id="extractFileStep">
+			<batch:tasklet>
+				<batch:chunk reader="extractFileReader" processor="extractFileProcessor" writer="extractFileWriter" commit-interval="10"/>
+			</batch:tasklet>
+		</batch:step>
+	</batch:job>
+
+	<!-- 定义 reader -->
+	<bean id="extractFileReader" class="org.springframework.batch.item.database.JdbcCursorItemReader" scope="step">
+	    <property name="dataSource" ref="dataSource"/>
+	    <property name="sql" value="select * from people"/>
+	    <property name="rowMapper" ref="rowMapper"/>
+	</bean>
+	
+	<bean id="rowMapper" class="org.springframework.jdbc.core.BeanPropertyRowMapper" scope="step">
+		<constructor-arg value="shangbo.springbatch.example5.People"/>
+	</bean>
+	
+	<!-- 定义 processor -->
+	<bean id="extractFileProcessor" class="org.springframework.batch.item.support.PassThroughItemProcessor" scope="step"/>
+
+	<!-- 定义 writer -->
+	<bean id="extractFileWriter" class="shangbo.springbatch.example5.MyFileItemWriter" scope="step">
+		<property name="header" value="id        name"/>
+		<property name="delegate" ref="targetFileWriter"/>
+	</bean>
+	
+	<bean id="targetFileWriter" class="org.springframework.batch.item.file.FlatFileItemWriter" scope="step">
+		<!-- 文件编码方式 -->
+		<property name="encoding" value="UTF-8" />
+		<property name="resource" value="file:///D:/0_Shangbo/Dev/Workspace/people_#{jobParameters['business_date']}.txt" />
+		<property name="headerCallback" ref="extractFileWriter"/>
+		<property name="footerCallback" ref="extractFileWriter"/>
+	    <property name="lineAggregator">
+	        <bean class="org.springframework.batch.item.file.transform.FormatterLineAggregator">
+	        	<property name="format" value="%10d%30s"/>
+	        	<property name="fieldExtractor">
+	        		<bean class="org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor">
+	        			<property name="names" value="id,name"/>
+	        		</bean>
+	        	</property>
+	        </bean>
+	    </property>
+	</bean>
+	
+</beans>
